@@ -769,8 +769,6 @@ BuildUI = function()
                             
                             -- Check if max rebirth reached
                             if not currentRequirements then
-                                print("[Auto Rebirth] Maximum rebirth reached!")
-                                -- Restore original state and disable
                                 if originalAutoSnowDamageState ~= nil then
                                     AutoDamage:SetValue(originalAutoSnowDamageState)
                                     originalAutoSnowDamageState = nil
@@ -786,9 +784,6 @@ BuildUI = function()
                             local currentSnowflakes = (findRawItem(playerData, "snowflakes") or {am=0}).am
                             if currentSnowflakes < currentRequirements.snowflakes then
                                 canAfford = false
-                                print(string.format("[Auto Rebirth] Need more snowflakes: %s / %s",
-                                    Functions.suffixes(currentSnowflakes),
-                                    Functions.suffixes(currentRequirements.snowflakes)))
                             end
                             
                             -- Check required items
@@ -799,15 +794,10 @@ BuildUI = function()
                                 
                                 if playerAmount < neededAmount then
                                     canAfford = false
-                                    print(string.format("[Auto Rebirth] Need more %s: %s / %s",
-                                        itemName,
-                                        Functions.suffixes(playerAmount),
-                                        Functions.suffixes(neededAmount)))
                                 end
                             end
                             
                             if canAfford then
-                                print("[Auto Rebirth] ✅ Can afford rebirth! Executing...")
                                 Knit.GetService("ChristmasService"):christmasRebirth()
                                 
                                 -- Turn off auto damage after successful rebirth
@@ -817,8 +807,6 @@ BuildUI = function()
                                 
                                 task.wait(2)
                             else
-                                -- Can't afford, enable auto damage to farm materials
-                                print("[Auto Rebirth] ❌ Cannot afford yet, farming materials...")
                                 if not AutoDamage.Value then
                                     AutoDamage:SetValue(true)
                                 end
@@ -828,8 +816,6 @@ BuildUI = function()
                     end
                 end)
             else
-                -- When manually disabled, restore original Auto Damage state
-                print("[Auto Rebirth] Manually disabled, restoring original snow damage state")
                 if originalAutoSnowDamageState ~= nil then
                     AutoDamage:SetValue(originalAutoSnowDamageState)
                     originalAutoSnowDamageState = nil
@@ -975,7 +961,7 @@ AutoUseSection:Toggle("AutoUseChristmasItems", {
     SaveManager:IgnoreThemeSettings()
     SaveManager:SetIgnoreIndexes{}
     InterfaceManager:SetFolder("FluentScriptHub")
-    SaveManager:SetFolder("FluentScriptHub/ChristmasRCU")
+    SaveManager:SetFolder("FluentScriptHub/specific-game")
     InterfaceManager:BuildInterfaceSection(Tabs.Settings)
     SaveManager:BuildConfigSection(Tabs.Settings)
     Window:SelectTab(1)
