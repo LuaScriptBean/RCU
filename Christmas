@@ -830,7 +830,7 @@ BuildUI = function()
 
     ChristmasTreeSection:Toggle("AutoClaimChristmasTree", {
         Title = "Auto Claim Christmas Tree",
-        Description = "Automatically claims Christmas Tree rewards every 5 seconds.",
+        Description = "Automatically claims Christmas Tree",
         Default = false,
         Callback = function(enabled)
             if autoClaimTreeThread then
@@ -844,7 +844,7 @@ BuildUI = function()
                         pcall(function()
                             Knit.GetService("ChristmasService"):claimChristmasTree()
                         end)
-                        task.wait(5)
+                        task.wait(1)
                     end
                 end)
             end
