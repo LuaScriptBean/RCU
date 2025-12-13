@@ -1,0 +1,1047 @@
+local Library = loadstring(game:HttpGetAsync("https://github.com/ActualMasterOogway/Fluent-Renewed/releases/latest/download/Fluent.luau"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/bigbeanscripts/Pet-Warriors/refs/heads/main/test"))()
+local InterfaceManager = loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/ActualMasterOogway/Fluent-Renewed/master/Addons/InterfaceManager.luau"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/SenhorLDS/ProjectLDSHUB/refs/heads/main/Anti%20AFK"))()
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local CollectionService = game:GetService("CollectionService")
+local LocalPlayer = Players.LocalPlayer
+
+local Knit
+local ClickService, EggService, RebirthService, TreeService, AxeService, InventoryService,
+      PetService, RewardService, UpgradeService, SeasonService, AuraService, EventService,
+      OrbService, FarmService, BuildingService, ClanService, LumberjackService
+local DataController, EggController, TreeController, HatchingController, AuraController,
+      MapController, OrbController, ItemController, SoundController, FarmController, BuildingController
+
+-- Global variables for UI window and tabs
+local Window, Tabs
+
+spawn(function()
+    while wait(30) do 
+        pcall(function() collectgarbage("collect") end)
+    end
+end)
+
+BuildUI = function()
+
+
+    local ClickSection = Tabs.Christmas:AddSection("Auto Click")
+
+    local ClickController = require(game:GetService("Players").LocalPlayer.PlayerScripts.Client.Controllers.ClickController)
+    local isMainAutoClicking = false 
+    
+    local AutoClick = ClickSection:Toggle("AutoClick", {
+        Title = "Auto Click",
+        Description = "This might be detected, so use this carefully!",
+        Default = false,
+        Callback = function(Value)
+            isMainAutoClicking = Value
+            if Value then
+                task.spawn(function()
+                    while isMainAutoClicking do
+                        ClickController:setLastClickType(2) 
+                        ClickController:setDebounce()
+                        ClickController:doClick()
+                        task.wait(0.02)
+                    end
+                end)
+            end
+        end
+    })
+
+
+    local EggHatchingSection = Tabs.Christmas:AddSection("Auto Hatch")
+
+    local EggsModule = require(ReplicatedStorage.Shared.List.Pets.Eggs)
+    local EggUtils = require(ReplicatedStorage.Shared.Util.EggUtils)
+    local SuffixToNumber = require(ReplicatedStorage.Shared.Functions.SuffixToNumber)
+
+    -- Build a reverse lookup table for suffixes from SuffixToNumber
+    local suffixes = {}
+    for suffix, power in pairs(debug.getupvalue(SuffixToNumber, 1)) do
+        suffixes[power] = suffix
+    end
+
+    local function formatNumber(num)
+        if num < 1000 then return tostring(num) end
+        local bestPower = 0
+        for power, _ in pairs(suffixes) do
+            if num >= 10^(power * 3) and power > bestPower then
+                bestPower = power
+            end
+        end
+        if bestPower > 0 then
+            local value = num / (10 ^ (bestPower * 3))
+            local suffix = suffixes[bestPower]
+            return string.format("%.2f%s", value, suffix):gsub("%.00", "")
+        end
+        return tostring(num)
+    end
+
+    -- Get eggs from Christmas map workspace
+    local eggsTable, displayToEggName = {}, {}
+    local christmasEggsFolder = Workspace.Game.Maps.Christmas.Eggs
+
+    for _, eggModel in ipairs(christmasEggsFolder:GetChildren()) do
+        local eggName = eggModel.Name
+        
+        -- Exclude SupremeSign
+        if eggName ~= "SupremeSign" then
+            local eggData = EggsModule[eggName]
+            
+            if eggData and typeof(eggData) == "table" and eggData.cost then
+                -- Force currency to be snowflakes
+                local currency = "snowflakes"
+                
+                table.insert(eggsTable, {
+                    name = eggName, 
+                    cost = eggData.cost, 
+                    currency = currency
+                })
+            end
+        end
+    end
+
+    table.sort(eggsTable, function(a, b) return a.cost < b.cost end)
+
+    local eggOptions = {}
+    for _, eggInfo in ipairs(eggsTable) do
+        local displayName = eggInfo.name .. " - " .. formatNumber(eggInfo.cost) .. " " .. eggInfo.currency
+        table.insert(eggOptions, displayName)
+        displayToEggName[displayName] = eggInfo.name
+    end
+
+    selectedEgg = eggsTable[1] and eggsTable[1].name
+    local defaultEgg = eggOptions[1]
+
+    table.insert(eggOptions, "Best Egg (Snowflakes)")
+
+    EggDropdown = EggHatchingSection:Dropdown("SelectEgg", {
+        Title = "Select Egg",
+        Values = eggOptions,
+        Default = defaultEgg,
+        Multi = false,
+        Searchable = true,
+        Callback = function(Value)
+            if Value == "Best Egg (Snowflakes)" then
+                -- Find the most expensive snowflakes egg regardless of affordability
+                local bestEggName = nil
+                local highestCost = 0
+                
+                for _, eggInfo in ipairs(eggsTable) do
+                    if eggInfo.currency == "snowflakes" and eggInfo.cost > highestCost then
+                        highestCost = eggInfo.cost
+                        bestEggName = eggInfo.name
+                    end
+                end
+                
+                selectedEgg = bestEggName or selectedEgg
+                return selectedEgg
+            else
+                selectedEgg = displayToEggName[Value] or (Value:match("^(.-) %-") or Value)
+            end
+        end
+    })
+
+    local hatchAmounts = {["1x"]=1, ["3x"]=3, ["Max"]=99}
+    selectedAmount = hatchAmounts["Max"]
+    HatchAmount = EggHatchingSection:Dropdown("SelectHatchAmount", {
+        Title = "Select Hatch Amount", Values = {"1x", "3x", "Max"}, Multi = false, Default = "Max",
+        Callback = function(Value) selectedAmount = hatchAmounts[Value] or 1 end
+    })
+
+    getLuckyIdFSnowShovelingggName = function(eggName)
+        for _, eggModel in CollectionService:GetTagged("Egg") do
+            if eggModel.Name == eggName then return eggModel:GetAttribute("luckyEggId") end
+        end
+        return nil
+    end
+
+    useLuckyEggs = false
+    LuckyEgg = EggHatchingSection:Toggle("HatchLuckyEggs", {
+        Title = "Use Lucky Eggs", Default = false,
+        Callback = function(enabled) useLuckyEggs = enabled end
+    })
+
+    _G.SmartHatchDelay = 4.11
+    task.spawn(function()
+        local hatchTimeLabel = LocalPlayer.PlayerGui.MainUI.Menus.SettingsFrame.Main.List.Multipliers.HatchingSpeed.Main.Amount
+        while true do
+            local success, labelText = pcall(function() return hatchTimeLabel.Text end)
+            if success and labelText then
+                local numberString = string.match(labelText, "%d+%.?%d*")
+                if numberString then _G.SmartHatchDelay = (tonumber(numberString) or 4.01) + 0.1 end
+            end
+            task.wait(5)
+        end
+    end)
+
+    local AutoHatch = EggHatchingSection:Toggle("AutoHatch", {
+        Title = "Auto Hatch Eggs",
+        Default = false,
+        Callback = function(Value)
+            _G.AutoHatchEnabled = Value
+            if Value then
+                task.spawn(function()
+                    while _G.AutoHatchEnabled do
+                        if not HatchingController._isHatching then
+                            local args = {selectedEgg, selectedAmount or 1}
+                            if useLuckyEggs then
+                                local bestLuckyEggId = nil
+                                local highestMultiplier = 0
+                                for luckyEggId, _ in pairs(EggController._luckyEggs or {}) do
+                                    local multiplier = (EggController._globalLuckEventAmount or 0) * 1000
+                                    if multiplier > highestMultiplier then
+                                        highestMultiplier = multiplier
+                                        bestLuckyEggId = luckyEggId
+                                    end
+                                end
+                                if bestLuckyEggId then
+                                    table.insert(args, {luckyEggId = bestLuckyEggId})
+                                end
+                            end
+                            EggService.openEgg._re:FireServer(unpack(args))
+                            task.wait(0.17)  -- only delay here
+                        else
+                            task.wait(0.17)  -- wait even if currently hatching
+                        end
+                    end
+                end)
+            end
+        end
+    })
+
+
+    HideAnimationToggle = EggHatchingSection:Toggle("HideHatchAnimation", {
+        Title = "Hide Hatch Animation", Default = false,
+        Callback = function(Value)
+            local function overrideFunctions(shouldHide)
+                if not HatchingController._originalFunctions and shouldHide then
+                    HatchingController._originalFunctions = {
+                        playEggAnimation = HatchingController.playEggAnimation, playHatchingAnimation = HatchingController.playHatchingAnimation,
+                        animatePetIn = HatchingController.animatePetIn, animatePetOut = HatchingController.animatePetOut,
+                        dropEggs = HatchingController.dropEggs, shakeEggs = HatchingController.shakeEggs,
+                        scaleAndRemoveEggs = HatchingController.scaleAndRemoveEggs, playRevealSounds = HatchingController.playRevealSounds
+                    }
+                end
+                local emptyFunc = function() return nil end
+                for funcName, originalFunc in pairs(HatchingController._originalFunctions or {}) do
+                    HatchingController[funcName] = shouldHide and emptyFunc or originalFunc
+                end
+            end
+            overrideFunctions(Value)
+        end
+    })
+    
+    local MiniChestsSection = Tabs.Christmas:AddSection("Mini Chests")
+    
+    local collectChestsThread = nil
+
+    MiniChestsSection:Toggle("CollectMiniChests", {
+        Title = "Collect Mini Chests",
+        Description = "Automatically collects the mini chests in the Christmas world. You must be in the Christmas map for this to work.",
+        Default = false,
+        Callback = function(enabled)
+            if collectChestsThread then
+                task.cancel(collectChestsThread)
+                collectChestsThread = nil
+            end
+
+            if enabled then
+                collectChestsThread = task.spawn(function()
+                    while enabled do
+                        pcall(function()
+                            local chestsFolder = Workspace.Game.Maps:FindFirstChild("Christmas") 
+                                and Workspace.Game.Maps["Christmas"]:FindFirstChild("MiniChests")
+
+                            if chestsFolder then
+                                for _, chest in ipairs(chestsFolder:GetChildren()) do
+                                    local touchPart = chest:FindFirstChild("Touch")
+                                    local prompt = touchPart and touchPart:FindFirstChildOfClass("ProximityPrompt")
+
+                                    if prompt and prompt.Enabled then
+                                        fireproximityprompt(prompt)
+                                        task.wait(2)
+                                    end
+                                end
+                            end
+                        end)
+                        task.wait(5)
+                    end
+                end)
+            end
+        end
+    })
+
+    local ChristmasShopSection = Tabs.Christmas:AddSection("Christmas Shop")
+
+    local shopItemNames = {}
+    local shopItemMap = {}
+    local autoBuyShopThread = nil
+
+    pcall(function()
+        local ChristmasShopList = require(ReplicatedStorage.Shared.List.Christmas.ChristmasShop)
+        local itemsToSort = {}
+
+        for id, cost in pairs(ChristmasShopList) do
+            local displayName = string.format("%s (Cost: %s)", id, Functions.suffixes(cost))
+            table.insert(itemsToSort, { display = displayName, id = id, cost = cost })
+            shopItemMap[displayName] = { id = id, cost = cost }
+        end
+
+        table.sort(itemsToSort, function(a, b) return a.cost < b.cost end)
+
+        for _, itemData in ipairs(itemsToSort) do
+            table.insert(shopItemNames, itemData.display)
+        end
+    end)
+
+    local shopDropdown = ChristmasShopSection:Dropdown("SelectShopItems", {
+        Title = "Select Items to Auto Buy",
+        Values = shopItemNames,
+        Multi = true,
+        Searchable = true,
+        Default = {}
+    })
+
+    ChristmasShopSection:Toggle("AutoBuyShopItems", {
+        Title = "Auto Buy",
+        Description = "Automatically buys selected items you don't own and can afford.",
+        Default = false,
+        Callback = function(enabled)
+            if autoBuyShopThread then
+                task.cancel(autoBuyShopThread)
+                autoBuyShopThread = nil
+            end
+
+            if enabled then
+                autoBuyShopThread = task.spawn(function()
+                    while enabled do
+                        pcall(function()
+                            local selectedItems = shopDropdown.Value
+                            if not next(selectedItems) then return end
+
+                            local playerData = DataController:getData()
+                            local candyCornItem = Util.itemUtils.getItemFromName(playerData, "snowFlakes")
+                            local myCandyCorns = candyCornItem and candyCornItem:getAmount() or 0
+                            local playerOwnedData = playerData.christmasShop or {}
+
+                            for displayName, isSelected in pairs(selectedItems) do
+                                if isSelected then
+                                    local shopData = shopItemMap[displayName]
+                                    if not playerOwnedData[shopData.id] and myCandyCorns >= shopData.cost then
+                                        -- Corrected function name from buyChristmasShop to buyShop
+                                        Knit.GetService("ChristmasService"):buyShop(shopData.id)
+                                        myCandyCorns = myCandyCorns - shopData.cost
+                                        task.wait(1)
+                                    end
+                                end
+                            end
+                        end)
+                        task.wait(5)
+                    end
+                end)
+            end
+        end
+    })
+        
+    local ChristmasRewardsSection = Tabs.Christmas:AddSection("Christmas Rewards")
+
+    local autoClaimChristmasRewardThread = nil
+
+    ChristmasRewardsSection:Toggle("AutoClaimChristmasReward", {
+        Title = "Auto Claim Christmas Rewards",
+        Description = "Automatically claims rewards when you have Christmas Tickets.",
+        Default = false,
+        Callback = function(enabled)
+            if autoClaimChristmasRewardThread then
+                task.cancel(autoClaimChristmasRewardThread)
+                autoClaimChristmasRewardThread = nil
+            end
+
+            if enabled then
+                autoClaimChristmasRewardThread = task.spawn(function()
+                    while enabled do
+                        pcall(function()
+                            local playerData = DataController:getData()
+                            if not playerData then return end
+                            
+                            -- Get Christmas Ticket from inventory
+                            local christmasTicketItem = Util.itemUtils.getItemFromName(playerData, "christmasTicket")
+                            local ticketAmount = christmasTicketItem and christmasTicketItem:getAmount() or 0
+                            
+                            if ticketAmount > 0 then
+                                Knit.GetService("ChristmasService"):claimChristmasReward()
+                                task.wait()
+                            else
+                                task.wait(3)
+                            end
+                        end)
+                    end
+                end)
+            end
+        end
+    })
+
+    local CursedChestSection = Tabs.Christmas:AddSection("Frozen Chest")
+    
+    local useOneKeyThread, useAllKeysThread = nil, nil
+
+    CursedChestSection:Toggle("AutoUseOneCursedKey", {
+        Title = "Use 1x Ice Key",
+        Description = "Uses one Ice Key (every second).",
+        Default = false,
+        Callback = function(enabled)
+            if useOneKeyThread then task.cancel(useOneKeyThread); useOneKeyThread = nil end
+            if enabled then
+                useOneKeyThread = task.spawn(function()
+                    while enabled do
+                        pcall(function() Knit.GetService("ChristmasService"):fozenChest() end)
+                        task.wait(1)
+                    end
+                end)
+            end
+        end
+    })
+
+    CursedChestSection:Toggle("AutoUseAllCursedKeys", {
+        Title = "Use All Ice Keys",
+        Description = "Uses all available Ice Keys.",
+        Default = false,
+        Callback = function(enabled)
+            if useAllKeysThread then task.cancel(useAllKeysThread); useAllKeysThread = nil end
+            if enabled then
+                useAllKeysThread = task.spawn(function()
+                    while enabled do
+                        pcall(function() Knit.GetService("ChristmasService"):frozenChest(true) end)
+                        task.wait(5)
+                    end
+                end)
+            end
+        end
+    })
+
+
+    local AutoDamageSection = Tabs.Christmas:AddSection("Auto Damage Snow Piles")
+
+    local autoDamageThread = nil
+
+    local AutoDamage = AutoDamageSection:Toggle("AutoDamageSnowPiles", {
+        Title = "Auto Damage Snow Piles",
+        Description = "Breaks snow piles (you are getting rewards pretty fast, so check your inventory)",
+        Default = false,
+        Callback = function(enabled)
+            if autoDamageThread then
+                task.cancel(autoDamageThread)
+                autoDamageThread = nil
+            end
+
+            if enabled then
+                autoDamageThread = task.spawn(function()
+                    while enabled do
+                        pcall(function()
+                            Knit.GetService("ChristmasService").damageSnowPiles._re:FireServer(1000)
+                        end)
+                        task.wait(0.2)
+                    end
+                end)
+            end
+        end
+    })
+
+
+    local ShovelUpgradesSection = Tabs.Christmas:AddSection("Upgrade Shovel")
+
+    local autoUpgradeShovelThread = nil
+
+    -- Helper function to find raw item data from player's inventory
+    local function findRawItem(playerData, itemName)
+        if not playerData or not playerData.inventory then return nil end
+        for category, items in pairs(playerData.inventory) do
+            if type(items) == "table" then
+                for _, data in pairs(items) do
+                    if type(data) == "table" and data.nm == itemName then return data end
+                end
+            end
+        end
+        return nil
+    end
+
+    -- Status paragraph that updates every 5 seconds
+    local shovelStatusParagraph = ShovelUpgradesSection:Paragraph("ShovelUpgradeStatus", {
+        Title = "Shovel Upgrade Progress",
+        Content = "Loading...",
+        TitleAlignment = "Left"
+    })
+
+    -- Background task to keep the status paragraph updated
+    task.spawn(function()
+        while true do
+            pcall(function()
+                local playerData = DataController:getData()
+                if not playerData then return end
+
+                local ToolUpgrader = require(ReplicatedStorage.Shared.List.Christmas.ToolUpgrader)
+                local ChristmasItems = require(ReplicatedStorage.Shared.List.Items.ChristmasEvent)
+                
+                -- Find current shovel
+                local currentShovelIndex, currentShovelName = -1, "None"
+                for _, itemData in pairs(playerData.inventory.christmasEvent or {}) do
+                    local itemStats = ChristmasItems[itemData.nm]
+                    if itemStats and itemStats.isTool and itemStats.index and itemStats.index > currentShovelIndex then
+                        currentShovelIndex = itemStats.index
+                        currentShovelName = itemStats.name or itemData.nm
+                    end
+                end
+
+                -- Find next shovel
+                local nextShovelName = nil
+                for name, data in pairs(ChristmasItems) do
+                    if data.isTool and data.index and data.index == currentShovelIndex + 1 then
+                        nextShovelName = name
+                        break
+                    end
+                end
+                
+                local contentLines = {"Current: " .. currentShovelName}
+                
+                if not nextShovelName then
+                    table.insert(contentLines, "\n❄️ You have the BEST shovel!")
+                else
+                    local recipe = ToolUpgrader[nextShovelName]
+                    local nextName = ChristmasItems[nextShovelName].name or nextShovelName
+                    table.insert(contentLines, "Next: " .. nextName .. "\n")
+                    
+                    if recipe and recipe.required then
+                        for _, reqItem in ipairs(recipe.required) do
+                            local itemName = reqItem:getName()
+                            local needed = reqItem:getAmount()
+                            local current = (findRawItem(playerData, itemName) or {am=0}).am
+                            local status = (current >= needed) and "✅" or "❌"
+                            table.insert(contentLines, string.format("%s %s: %s / %s", 
+                                status, itemName, Functions.suffixes(current), Functions.suffixes(needed)))
+                        end
+                    end
+                end
+                
+                shovelStatusParagraph:SetValue(table.concat(contentLines, "\n"))
+            end)
+            task.wait(5)
+        end
+    end)
+
+    local AutoUpgradeShovelToggle = ShovelUpgradesSection:Toggle("AutoUpgradeShovel", {
+        Title = "Auto Upgrade Shovel",
+        Description = "Automatically upgrades your shovel. If you can't afford it, enables Auto Damage Snow Piles.",
+        Default = false,
+        Callback = function(enabled)
+            if autoUpgradeShovelThread then
+                task.cancel(autoUpgradeShovelThread)
+                autoUpgradeShovelThread = nil
+            end
+
+            if enabled then
+                -- Store the original Auto Damage state when enabling
+                OriginalAutoDamageState = AutoDamage.Value
+                
+                autoUpgradeShovelThread = task.spawn(function()
+                    while enabled do
+                        pcall(function()
+                            local playerData = DataController:getData()
+                            local ToolUpgrader = require(ReplicatedStorage.Shared.List.Christmas.ToolUpgrader)
+                            local ChristmasItems = require(ReplicatedStorage.Shared.List.Items.ChristmasEvent)
+
+                            -- Find current and next shovel
+                            local currentShovelIndex = -1
+                            for _, itemData in pairs(playerData.inventory.christmasEvent or {}) do
+                                local itemStats = ChristmasItems[itemData.nm]
+                                if itemStats and itemStats.isTool and itemStats.index and itemStats.index > currentShovelIndex then
+                                    currentShovelIndex = itemStats.index
+                                end
+                            end
+
+                            local nextShovelName = nil
+                            for name, data in pairs(ChristmasItems) do
+                                if data.isTool and data.index and data.index == currentShovelIndex + 1 then
+                                    nextShovelName = name
+                                    break
+                                end
+                            end
+
+                            if not nextShovelName then
+                                -- Max shovel reached, restore original state and disable
+                                if OriginalAutoDamageState ~= nil then
+                                    AutoDamage:SetValue(_G.OriginalAutoDamageState)
+                                    OriginalAutoDamageState = nil
+                                end
+                                AutoUpgradeShovelToggle:SetValue(false)
+                                return
+                            end
+
+                            -- Check if can afford upgrade
+                            local canAfford = true
+                            local recipe = ToolUpgrader[nextShovelName]
+                            
+                            if recipe and recipe.required then
+                                for _, reqItem in ipairs(recipe.required) do
+                                    local itemName = reqItem:getName()
+                                    local needed = reqItem:getAmount()
+                                    local current = (findRawItem(playerData, itemName) or {am=0}).am
+                                    
+                                    if current < needed then
+                                        canAfford = false
+                                        break
+                                    end
+                                end
+                            end
+
+                            if canAfford then
+                                Knit.GetService("ChristmasToolService"):upgradeTool()
+                                if AutoDamage.Value then
+                                end
+                                task.wait(2)
+                            else
+                                -- Can't afford, enable auto damage to farm materials
+                                if not AutoDamage.Value then
+                                    AutoDamage:SetValue(true)
+                                end
+                            end
+                        end)
+                        task.wait(2)
+                    end
+                end)
+            else
+                -- When manually disabled, restore original Auto Damage state
+                if OriginalAutoDamageState ~= nil then
+                    AutoDamage:SetValue(OriginalAutoDamageState)
+                    OriginalAutoDamageState = nil
+                end
+            end
+        end
+    })
+
+    local SnowShovelingUpgradesSection = Tabs.Christmas:AddSection("Snow Shoveling Upgrades")
+
+    local SnowShovelingUpgradeNames, SnowShovelingUpgradesModule, SnowShovelingAutoUpgradeThread = {}, nil, nil
+
+    pcall(function()
+        SnowShovelingUpgradesModule = require(ReplicatedStorage.Shared.List.Christmas.SnowShovelingUpgrades)
+        for name, _ in pairs(SnowShovelingUpgradesModule) do table.insert(SnowShovelingUpgradeNames, name) end
+        table.sort(SnowShovelingUpgradeNames)
+    end)
+
+    if #SnowShovelingUpgradeNames > 0 then
+        local upgradesDropdown = SnowShovelingUpgradesSection:Dropdown("SnowShovelingUpgradesDropdown", {
+            Title = "Select SnowShoveling Upgrades",
+            Values = SnowShovelingUpgradeNames,
+            Multi = true,
+            Searchable = true,
+            Default = {}
+        })
+
+
+        SnowShovelingUpgradesSection:Toggle("AutoUpgradeSnowShoveling", {
+            Title = "Auto Upgrade",
+            Description = "Automatically buys selected upgrades when you can afford them.",
+            Default = false,
+            Callback = function(enabled)
+                if SnowShovelingAutoUpgradeThread then task.cancel(SnowShovelingAutoUpgradeThread); SnowShovelingAutoUpgradeThread = nil end
+                if enabled then
+                    SnowShovelingAutoUpgradeThread = task.spawn(function()
+                        while enabled do
+                            pcall(function()
+                                local selectedUpgrades = upgradesDropdown.Value
+                                if not next(selectedUpgrades) then return end
+                                local playerData = DataController:getData()
+                                for upgradeName, isSelected in pairs(selectedUpgrades) do
+                                    if not enabled then break end
+                                    if isSelected then
+                                        local currentLevel = (playerData.SnowShovelingUpgrades and playerData.SnowShovelingUpgrades[upgradeName]) or 0
+                                        local upgradeInfo = SnowShovelingUpgradesModule[upgradeName]
+                                        local nextUpgradeData = upgradeInfo and upgradeInfo.upgrades and upgradeInfo.upgrades[currentLevel + 1]
+                                        if nextUpgradeData then
+                                            local cost = nextUpgradeData.cost
+                                            local playerItem = Util.itemUtils.getItemFromName(playerData, cost:getName())
+                                            local playerAmount = playerItem and playerItem:getAmount() or 0
+                                            if playerAmount >= cost:getAmount() then
+                                                UpgradeService:upgradeSnowShoveling(upgradeName)
+                                                task.wait(1) 
+                                            end
+                                        end
+                                    end
+                                end
+                            end)
+                            task.wait(5) 
+                        end
+                    end)
+                end
+            end
+        })
+    end
+
+
+    local ChristmasRebirthSection = Tabs.Christmas:AddSection("Christmas Rebirth")
+
+    local autoChristmasRebirthThread, originalAutoSnowDamageState = nil, nil
+
+    local function findRawItem(playerData, itemName)
+        if not playerData or not playerData.inventory then return nil end
+        for _, items in pairs(playerData.inventory) do
+            if type(items) == "table" then 
+                for _, data in pairs(items) do 
+                    if type(data) == "table" and data.nm == itemName then 
+                        return data 
+                    end 
+                end 
+            end
+        end
+        return nil
+    end
+
+    local christmasRebirthStatusParagraph = ChristmasRebirthSection:Paragraph("ChristmasRebirthStatus", {
+        Title = "Next Christmas Rebirth Progress",
+        Content = "Loading...",
+        TitleAlignment = "Middle"
+    })
+
+    task.spawn(function()
+        while true do
+            pcall(function()
+                local data = DataController:getData()
+                if not data then return end
+                
+                local ChristmasRebirths = require(ReplicatedStorage.Shared.List.Christmas.ChristmasRebirths)
+                local currentRebirths = data.christmasRebirths or 0
+                local nextRebirth = currentRebirths + 1
+                local requirements = ChristmasRebirths[nextRebirth]
+                
+                local lines = {"Current Rebirths: " .. currentRebirths}
+                
+                if not requirements then
+                    table.insert(lines, "\n🎉 MAXIMUM REBIRTH LEVEL!")
+                else
+                    table.insert(lines, "Target: Rebirth " .. nextRebirth .. "\n")
+                    
+                    -- Show snowflakes requirement
+                    table.insert(lines, string.format("Snowflakes: %s / %s",
+                        Functions.suffixes((findRawItem(data, "snowflakes") or {am=0}).am),
+                        Functions.suffixes(requirements.snowflakes)))
+                    
+                    -- Show required items
+                    for _, reqItem in ipairs(requirements.required or {}) do
+                        table.insert(lines, string.format("%s: %s / %s",
+                            reqItem:getName(),
+                            Functions.suffixes((findRawItem(data, reqItem:getName()) or {am=0}).am),
+                            Functions.suffixes(reqItem:getAmount())))
+                    end
+                end
+                
+                christmasRebirthStatusParagraph:SetValue(table.concat(lines, "\n"))
+            end)
+            task.wait(3)
+        end
+    end)
+
+    local AutoChristmasRebirthToggle = ChristmasRebirthSection:Toggle("AutoChristmasRebirth", {
+        Title = "Auto Christmas Rebirth",
+        Description = "WARNING: Resets Snowflakes. Automatically farms snow piles for materials.",
+        Default = false,
+        Callback = function(enabled)
+            if autoChristmasRebirthThread then
+                task.cancel(autoChristmasRebirthThread)
+                autoChristmasRebirthThread = nil
+            end
+
+            if enabled then
+                -- Store the original Auto Damage Snow Piles state
+                originalAutoSnowDamageState = AutoDamage.Value
+                
+                autoChristmasRebirthThread = task.spawn(function()
+                    while enabled do
+                        pcall(function()
+                            local playerData = DataController:getData()
+                            local ChristmasRebirths = require(ReplicatedStorage.Shared.List.Christmas.ChristmasRebirths)
+                            local currentRebirths = playerData.christmasRebirths or 0
+                            local currentRequirements = ChristmasRebirths[currentRebirths + 1]
+                            
+                            -- Check if max rebirth reached
+                            if not currentRequirements then
+                                print("[Auto Rebirth] Maximum rebirth reached!")
+                                -- Restore original state and disable
+                                if originalAutoSnowDamageState ~= nil then
+                                    AutoDamage:SetValue(originalAutoSnowDamageState)
+                                    originalAutoSnowDamageState = nil
+                                end
+                                AutoChristmasRebirthToggle:SetValue(false)
+                                return
+                            end
+                            
+                            -- Check if we can afford the current rebirth
+                            local canAfford = true
+                            
+                            -- Check snowflakes
+                            local currentSnowflakes = (findRawItem(playerData, "snowflakes") or {am=0}).am
+                            if currentSnowflakes < currentRequirements.snowflakes then
+                                canAfford = false
+                                print(string.format("[Auto Rebirth] Need more snowflakes: %s / %s",
+                                    Functions.suffixes(currentSnowflakes),
+                                    Functions.suffixes(currentRequirements.snowflakes)))
+                            end
+                            
+                            -- Check required items
+                            for _, reqItem in ipairs(currentRequirements.required or {}) do
+                                local itemName = reqItem:getName()
+                                local playerAmount = (findRawItem(playerData, itemName) or {am=0}).am
+                                local neededAmount = reqItem:getAmount()
+                                
+                                if playerAmount < neededAmount then
+                                    canAfford = false
+                                    print(string.format("[Auto Rebirth] Need more %s: %s / %s",
+                                        itemName,
+                                        Functions.suffixes(playerAmount),
+                                        Functions.suffixes(neededAmount)))
+                                end
+                            end
+                            
+                            if canAfford then
+                                print("[Auto Rebirth] ✅ Can afford rebirth! Executing...")
+                                Knit.GetService("ChristmasService"):christmasRebirth()
+                                
+                                -- Turn off auto damage after successful rebirth
+                                if AutoDamage.Value then
+                                    AutoDamage:SetValue(false)
+                                end
+                                
+                                task.wait(2)
+                            else
+                                -- Can't afford, enable auto damage to farm materials
+                                print("[Auto Rebirth] ❌ Cannot afford yet, farming materials...")
+                                if not AutoDamage.Value then
+                                    AutoDamage:SetValue(true)
+                                end
+                            end
+                        end)
+                        task.wait(3)
+                    end
+                end)
+            else
+                -- When manually disabled, restore original Auto Damage state
+                print("[Auto Rebirth] Manually disabled, restoring original snow damage state")
+                if originalAutoSnowDamageState ~= nil then
+                    AutoDamage:SetValue(originalAutoSnowDamageState)
+                    originalAutoSnowDamageState = nil
+                end
+            end
+        end
+    })
+
+    local ChristmasTreeSection = Tabs.Christmas:AddSection("Christmas Tree")
+
+    local autoClaimTreeThread = nil
+
+    ChristmasTreeSection:Toggle("AutoClaimChristmasTree", {
+        Title = "Auto Claim Christmas Tree",
+        Description = "Automatically claims Christmas Tree rewards every 5 seconds.",
+        Default = false,
+        Callback = function(enabled)
+            if autoClaimTreeThread then
+                task.cancel(autoClaimTreeThread)
+                autoClaimTreeThread = nil
+            end
+
+            if enabled then
+                autoClaimTreeThread = task.spawn(function()
+                    while enabled do
+                        pcall(function()
+                            Knit.GetService("ChristmasService"):claimChristmasTree()
+                        end)
+                        task.wait(5)
+                    end
+                end)
+            end
+        end
+    })
+
+
+local AutoUseSection = Tabs.Christmas:AddSection("Auto Use Items")
+
+local autoUseThread = nil
+local autoUseEnabled = false
+local selectedAutoUseItems = {}
+
+-- Build list of usable consumable items
+local autoUseItemNames = {}
+local autoUseItemMap = {}
+
+pcall(function()
+    local ChristmasItems = require(ReplicatedStorage.Shared.List.Items.ChristmasEvent)
+    
+    for itemId, itemInfo in pairs(ChristmasItems) do
+        -- Only include items that are consumable (have multiplier and seconds)
+        -- Exclude unusable items, tools, and boxes
+        if itemInfo.multiplier and itemInfo.seconds and not itemInfo.unusable and not itemInfo.isTool and itemInfo.itemType ~= "box" then
+            local displayName = itemInfo.name
+            table.insert(autoUseItemNames, displayName)
+            autoUseItemMap[displayName] = itemId
+        end
+    end
+    
+    table.sort(autoUseItemNames)
+end)
+
+local autoUseDropdown = AutoUseSection:Dropdown("SelectAutoUseItems", {
+    Title = "Select Items to Auto Use",
+    Values = autoUseItemNames,
+    Multi = true,
+    Searchable = true,
+    Default = {}
+})
+
+AutoUseSection:Toggle("AutoUseChristmasItems", {
+    Title = "Auto Use Consumable Items",
+    Description = "Automatically uses selected Christmas potions and consumables when not active.",
+    Default = false,
+    Callback = function(enabled)
+        autoUseEnabled = enabled
+        
+        if autoUseThread then
+            task.cancel(autoUseThread)
+            autoUseThread = nil
+        end
+
+        if enabled then
+            autoUseThread = task.spawn(function()
+                while autoUseEnabled do
+                    pcall(function()
+                        local selectedItems = autoUseDropdown.Value
+                        if not next(selectedItems) then 
+                            return 
+                        end
+
+                        local playerData = DataController:getData()
+                        if not playerData then 
+                            return 
+                        end
+
+                        local ChristmasItems = require(ReplicatedStorage.Shared.List.Items.ChristmasEvent)
+                        local activeBoosts = playerData.activeBoosts or {}
+
+                        local activeCount = 0
+                        for _ in pairs(activeBoosts) do activeCount = activeCount + 1 end
+
+                        -- Iterate through selected items
+                        for displayName, isSelected in pairs(selectedItems) do
+                            if isSelected then
+                                local itemId = autoUseItemMap[displayName]
+                                local itemInfo = ChristmasItems[itemId]
+                                
+                                if itemInfo then
+                                    -- Check boost names (try multiple formats)
+                                    local boostName = itemId:gsub("christmas", ""):gsub("Potion", "")
+                                    local isActive = activeBoosts[itemId] or activeBoosts[boostName] or activeBoosts[displayName]
+                                    
+                                    if not isActive then
+                                        -- Find the item in player's inventory
+                                        if playerData.inventory and playerData.inventory.christmasEvent then
+                                            for inventoryId, itemData in pairs(playerData.inventory.christmasEvent) do
+                                                if itemData.nm == itemId and itemData.am and itemData.am > 0 then
+                                                    Knit.GetService("InventoryService"):useItem(inventoryId, {use = 1})
+                                                    task.wait(1)
+                                                    break
+                                                end
+                                            end
+                                        else
+                                        end
+                                    else
+                                        local timeLeft = activeBoosts[itemId] or activeBoosts[boostName] or activeBoosts[displayName] or 0
+                                    end
+                                end
+                            end
+                        end
+                    end)
+                    task.wait(5) -- Check every 5 seconds
+                end
+            end)
+        end
+    end
+})
+
+    -- Final UI setup calls
+    SaveManager:SetLibrary(Library)
+    InterfaceManager:SetLibrary(Library)
+    SaveManager:IgnoreThemeSettings()
+    SaveManager:SetIgnoreIndexes{}
+    InterfaceManager:SetFolder("FluentScriptHub")
+    SaveManager:SetFolder("FluentScriptHub/specific-game")
+    InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+    SaveManager:BuildConfigSection(Tabs.Settings)
+    Window:SelectTab(1)
+    SaveManager:LoadAutoloadConfig()
+end
+
+
+task.spawn(function()
+    if not game:IsLoaded() then game.Loaded:Wait() end
+
+    Knit = require(ReplicatedStorage.Packages.Knit)
+    Knit.OnStart():await()
+
+    ClickService = Knit.GetService("ClickService")
+    EggService = Knit.GetService("EggService")
+    RebirthService = Knit.GetService("RebirthService")
+    GardenService = Knit.GetService("GardenService")
+    TreeService = Knit.GetService("TreeService")
+    AxeService = Knit.GetService("AxeService")
+    InventoryService = Knit.GetService("InventoryService")
+    PetService = Knit.GetService("PetService")
+    RewardService = Knit.GetService("RewardService")
+    ClanService = Knit.GetService("ClanService")
+    UpgradeService = Knit.GetService("UpgradeService")
+    SeasonService = Knit.GetService("SeasonService")
+    FarmService = Knit.GetService("FarmService")
+    AuraService = Knit.GetService("AuraService")
+    EventService = Knit.GetService("EventService")
+    OrbService = Knit.GetService("OrbService")
+    BuildingService = Knit.GetService("BuildingService")
+    LumberjackService = Knit.GetService("LumberjackService")
+    DungeonService = Knit.GetService("DungeonService")
+    
+    DataController = Knit.GetController("DataController")
+    EggController = Knit.GetController("EggController")
+    TreeController = Knit.GetController("TreeController")
+    AuraController = Knit.GetController("AuraController")
+    MapController = Knit.GetController("MapController")
+    OrbController = Knit.GetController("OrbController")
+    ItemController = Knit.GetController("ItemController")
+    SoundController = Knit.GetController("SoundController")
+    FarmController = Knit.GetController("FarmController")
+    BuildingController = Knit.GetController("BuildingController")
+    HatchingController = require(LocalPlayer:WaitForChild("PlayerScripts"):WaitForChild("Client"):WaitForChild("Controllers"):WaitForChild("HatchingController"))
+    
+    Functions = require(ReplicatedStorage.Shared.Functions)
+    seasonVariables = require(ReplicatedStorage.Shared.Variables)
+    seasonUtils = require(ReplicatedStorage.Shared.Util)
+    seasonTiersList = require(ReplicatedStorage.Shared.List[("Season%*"):format(seasonVariables.season)].Tiers)
+    Util = require(ReplicatedStorage.Shared.Util)
+    Values = require(ReplicatedStorage.Shared.Values)   
+
+    Window = Library:Window{
+        Title = "RCU",
+        SubTitle = "By Duckie",
+        TabWidth = 160,
+        Size =  UDim2.fromOffset(580, 460),
+        Resize = false,
+        Theme = "Darker",
+        MinimizeKey = Enum.KeyCode.LeftShift
+    }
+
+    Tabs = {
+        Settings = Window:AddTab({ Title = "Settings", Icon = "settings" }),
+        Christmas = Window:AddTab({ Title = "Christmas Event", Icon = "snowflake" }),
+    }
+
+    BuildUI()
+end)
