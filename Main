@@ -88,6 +88,28 @@ spawn(function()
 end)
 
 BuildUI = function()
+    
+    Christmasscript = Tabs.Event:AddSection("Christmas Script")
+    
+    Christmasscript:Button({
+        Title = "Christmas Script",
+        Description = "Sorry for the separate loadstring! Having such a large script was causing me to run out of local uses and creating lag issues.",
+        Callback = function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/LuaScriptBean/RCU/refs/heads/main/Christmas"))()
+        end
+    })
+
+    Christmasscript:Toggle("AutoLoadChristmas", {
+    Title = "Auto Load Christmas Script",
+    Description = "Automatically loads the fish script when you load this script. Use this if you have auto load config on.",
+    Default = false,
+    Callback = function(enabled)
+        AutoLoadChristmas = enabled
+        if enabled then
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/LuaScriptBean/RCU/refs/heads/main/Christmas"))()
+        end
+    end})
+
 
     local TeleportService = game:GetService("TeleportService")
 
@@ -5885,6 +5907,7 @@ task.spawn(function()
     Tabs = {
         Settings = Window:AddTab({ Title = "Settings", Icon = "settings" }),
         Rejoin = Window:AddTab({ Title = "Auto Rejoin", Icon = "recycle" }),
+        Event = Window:AddTab({ Title = "Christmas Event", Icon = "snowflake" }),
         Main = Window:AddTab({ Title = "Auto Farm", Icon = "crown" }),
         Eggs = Window:AddTab({ Title = "Eggs", Icon = "egg" }),
         Tree = Window:AddTab({ Title = "Axe/Tree", Icon = "phosphor-tree-evergreen-duotone" }),
