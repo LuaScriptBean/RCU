@@ -718,29 +718,34 @@ for attempt = 1, maxRetries do
                 end
             })
 
+            local HatchingController = require(LocalPlayer.PlayerScripts.Client.Controllers.HatchingController)
 
+            -- Save the original function once
+            if not HatchingController._realPlayEggAnimation then
+                HatchingController._realPlayEggAnimation = HatchingController.playEggAnimation
+            end
+
+            -- State variable
+            local isHatchHidden = false
+
+            -- Overwrite the function
+            HatchingController.playEggAnimation = function(self, ...)
+                if isHatchHidden then
+                    return nil -- Stops the animation and camera effects
+                else
+                    return HatchingController._realPlayEggAnimation(self, ...)
+                end
+            end
+
+            -- Your UI Toggle Code
             HideAnimationToggle = EggHatchingSection:Toggle("HideHatchAnimation", {
-                Title = "Hide Hatch Animation", Default = false,
+                Title = "Hide Hatch Animation", 
+                Default = false,
                 Callback = function(Value)
-                    local function overrideFunctions(shouldHide)
-                        if not HatchingController._originalFunctions and shouldHide then
-                            HatchingController._originalFunctions = {
-                                playEggAnimation = HatchingController.playEggAnimation, playHatchingAnimation = HatchingController.playHatchingAnimation,
-                                animatePetIn = HatchingController.animatePetIn, animatePetOut = HatchingController.animatePetOut,
-                                dropEggs = HatchingController.dropEggs, shakeEggs = HatchingController.shakeEggs,
-                                scaleAndRemoveEggs = HatchingController.scaleAndRemoveEggs, playRevealSounds = HatchingController.playRevealSounds
-                            }
-                        end
-                        local emptyFunc = function() return nil end
-                        for funcName, originalFunc in pairs(HatchingController._originalFunctions or {}) do
-                            HatchingController[funcName] = shouldHide and emptyFunc or originalFunc
-                        end
-                    end
-                    overrideFunctions(Value)
+                    isHatchHidden = Value
                 end
             })
-
-            
+                    
             local AutoIndexSection = Tabs.Eggs:AddSection("Index")
 
             local InstructionsParagraph = AutoIndexSection:Paragraph("AutoIndexInstructions", {
@@ -5800,6 +5805,7 @@ for attempt = 1, maxRetries do
                     end
                 end
             })
+
             SaveManager:SetLibrary(Library)
             InterfaceManager:SetLibrary(Library)
             SaveManager:IgnoreThemeSettings()
@@ -5937,6 +5943,7 @@ for attempt = 1, maxRetries do
                 Fish = Window:AddTab({ Title = "Fishing", Icon = "fish" }),
                 Claim = Window:AddTab({ Title = "Auto Claim/Collect", Icon = "gift" }),
                 Misc = Window:AddTab({ Title = "Misc", Icon = "sparkles" }),
+                Discord = Window:AddTab({ Title = "Webhook", Icon = "phosphor-discord-logo" })
             }
 
             BuildUI()
