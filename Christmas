@@ -635,7 +635,7 @@ BuildUI = function()
 
     if #SnowShovelingUpgradeNames > 0 then
         local upgradesDropdown = SnowShovelingUpgradesSection:Dropdown("SnowShovelingUpgradesDropdown", {
-            Title = "Select SnowShoveling Upgrades",
+            Title = "Select Snow Shoveling Upgrades",
             Values = SnowShovelingUpgradeNames,
             Multi = true,
             Searchable = true,
@@ -667,9 +667,10 @@ BuildUI = function()
                                             local playerItem = Util.itemUtils.getItemFromName(playerData, cost:getName())
                                             local playerAmount = playerItem and playerItem:getAmount() or 0
                                             if playerAmount >= cost:getAmount() then
-                                                UpgradeService:upgradeSnowShoveling(upgradeName)
+                                                UpgradeService:upgradeShoveling(upgradeName)
                                                 task.wait(1) 
                                             end
+                                            
                                         end
                                     end
                                 end
