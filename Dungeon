@@ -452,7 +452,7 @@ BuildUI = function()
 
     DungeonUISection:Toggle("NoDungeonPets", {
         Title = "Visually Remove Dungeon Pets",
-        Description = "Prevents pets from visually spawning (to increase FPS).",
+        Description = "Prevents pets from visually spawning (to increase FPS). Must be enabled before entering a dungeon to work.",
         Default = false,
         Callback = function(enabled)
             isNoPetsEnabled = enabled
@@ -473,12 +473,40 @@ BuildUI = function()
                 -- 3. Restore the original function
                 if originalCreatePets then
                     DC.createPets = originalCreatePets
-                    originalCreatePets = nil -- Reset so we grab a fresh copy next time
+                    originalCreatePets = nil 
                 end
             end
         end
     })
-    
+
+
+    local Knit = require(game:GetService("ReplicatedStorage").Packages.Knit)
+    local DC = Knit.GetController("DungeonController")
+    local CollectionService = game:GetService("CollectionService")
+
+    -- 1. Fix "invalid argument to random" (Powerups)
+    local oldGetPowerupPosition = DC.getPowerupPosition
+    DC.getPowerupPosition = function(self)
+        local spawns = CollectionService:GetTagged("DungeonPowerupSpawn")
+        -- If there are no spawn points, return a dummy position to stop the crash
+        if #spawns == 0 then
+            return CFrame.new(0, -1000, 0) 
+        end
+        return oldGetPowerupPosition(self)
+    end
+
+    -- 2. Fix "Infinite yield" (Boss Spawn)
+    local oldSpawnBoss = DC.spawnBoss
+    DC.spawnBoss = function(self)
+        local room = self:getDungeonRoom()
+        -- Only try to spawn the boss if the room and the spawn point actually exist
+        if room and room:FindFirstChild("BossSpawn") then
+            return oldSpawnBoss(self)
+        end
+    end
+    print("Dungeon fixes applied.")
+
+
     DungeonMerchant = Tabs.Dunegon:AddSection("Dungeon Shop")
 
     -- Get all dungeon shop items
