@@ -451,7 +451,7 @@ BuildUI = function()
                         pcall(function()
                             Knit.GetService("ChristmasService").damageSnowPiles._re:FireServer(1000)
                         end)
-                        task.wait(0.2)
+                        task.wait(0.1)
                     end
                 end)
             end
@@ -688,6 +688,136 @@ BuildUI = function()
             end
         })
     end
+
+    local ChristmasSection = Tabs.Christmas:AddSection("Build A Snowman")
+
+    local autoBuildThread = nil
+
+    local snowmanTimerParagraph = ChristmasSection:Paragraph("SnowmanTimer", {
+        Title = "Snowman Event Status",
+        Content = "Initializing..."
+    })
+    task.spawn(function()
+        while task.wait(1) do
+            pcall(function()
+                local cycle = (Knit.serverTimeNow + 3600) % 10800
+                local statusText = ""
+                if cycle < 300 then 
+                    local timeRemaining = 300 - cycle
+                    statusText = "Joining closes in: " .. Functions.formatTime(timeRemaining)
+                elseif cycle < 900 then 
+                    local timeRemaining = 900 - cycle
+                    statusText = "Building... Rewards in: " .. Functions.formatTime(timeRemaining)
+                elseif cycle < 3600 then 
+                    local timeRemaining = 3600 - cycle
+                    statusText = "Reward window closes in: " .. Functions.formatTime(timeRemaining)
+                else
+                    local timeRemaining = 10800 - cycle
+                    statusText = "Next event starts in: " .. Functions.formatTime(timeRemaining)
+                end
+                
+                snowmanTimerParagraph:SetValue(statusText)
+            end)
+        end
+    end)
+
+    do
+        local originalToggleStates = nil
+
+        ChristmasSection:Toggle("AutoBuildSnowman", {
+            Title = "Auto Build Snowman",
+            Description = "This will modify some toggles temporarily, to maximise the outcome of the event. Once over, it will restore them :)",
+            Default = false,
+            Callback = function(enabled)
+                if autoBuildThread then task.cancel(autoBuildThread); autoBuildThread = nil end
+
+                if enabled then
+                    autoBuildThread = task.spawn(function()
+                        local hasModifiedToggles = false
+                        local hasAttemptedJoin = false
+                        while task.wait(5) do
+                            pcall(function()
+                                local cycle = (Knit.serverTimeNow + 3600) % 10800
+                                
+                                -- Define the key time windows
+                                local isTimeToJoin = cycle >= 280 and cycle < 300
+                                local isRewardWindow = cycle >= 900 and cycle < 3600
+                                if isTimeToJoin then
+                                    if not hasModifiedToggles then
+                                        hasModifiedToggles = true
+                                        
+                                        originalToggleStates = {
+                                            autoHatch = AutoHatchToggle.Value,
+                                            autoDamage = AutoDamageToggle.Value
+                                        }
+                                        
+                                        task.defer(function() 
+                                            AutoHatchToggle:SetValue(false)
+                                            AutoDamageToggle:SetValue(true)
+                                        end)
+                                    end
+                                    if not hasAttemptedJoin then
+                                        hasAttemptedJoin = true
+                                        Knit.GetService("SnowmanService"):joinBuildASnowman()
+                                        task.wait(5)
+                                        Knit.GetService("SnowmanService"):joinBuildASnowman()
+                                    end
+                                
+                                elseif isRewardWindow and hasModifiedToggles then
+                                    
+                                    if originalToggleStates then
+                                        task.defer(function() 
+                                            AutoHatchToggle:SetValue(originalToggleStates.autoHatch)
+                                            AutoDamageToggle:SetValue(originalToggleStates.autoDamage)
+                                        end)
+                                    end
+
+                                    hasModifiedToggles = false
+                                    originalToggleStates = nil
+                                end
+
+                                if cycle < 280 then
+                                    hasAttemptedJoin = false
+                                end
+                            end)
+                        end
+                    end)
+                else 
+                    if originalToggleStates then
+                        task.defer(function()
+                            AutoHatchToggle:SetValue(originalToggleStates.autoHatch)
+                            AutoDamageToggle:SetValue(originalToggleStates.autoDamage)
+                        end)
+                        originalToggleStates = nil -- Clear the saved state
+                    end
+                end
+            end
+        })
+    end
+
+    local claimChestThread = nil
+
+    ChristmasSection:Toggle("AutoClaimChest", {
+        Title = "Auto Claim Snowman Chest",
+        Default = false,
+        Callback = function(enabled)
+            if claimChestThread then
+                task.cancel(claimChestThread)
+                claimChestThread = nil
+            end
+
+            if enabled then
+                claimChestThread = task.spawn(function()
+                    while true do
+                        pcall(function()
+                            Knit.GetService("SnowmanService"):claimBuildASnowmanChest()
+                        end)
+                        task.wait(10)
+                    end
+                end)
+            end
+        end
+    })
 
 
     local ChristmasRebirthSection = Tabs.Christmas:AddSection("Christmas Rebirth")
