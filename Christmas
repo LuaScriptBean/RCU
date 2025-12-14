@@ -52,12 +52,14 @@ BuildUI = function()
         end
     })
 
-
     local EggHatchingSection = Tabs.Christmas:AddSection("Auto Hatch")
 
     local EggsModule = require(ReplicatedStorage.Shared.List.Pets.Eggs)
     local EggUtils = require(ReplicatedStorage.Shared.Util.EggUtils)
     local SuffixToNumber = require(ReplicatedStorage.Shared.Functions.SuffixToNumber)
+
+    -- Variable to track if we are in the special snowman mode
+    local isBuildASnowmanMode = false
 
     -- Build a reverse lookup table for suffixes from SuffixToNumber
     local suffixes = {}
@@ -117,7 +119,8 @@ BuildUI = function()
     selectedEgg = eggsTable[1] and eggsTable[1].name
     local defaultEgg = eggOptions[1]
 
-    table.insert(eggOptions, "Best Egg (Snowflakes)")
+    -- Add the special option
+    table.insert(eggOptions, "Build a Snowman Egg")
 
     EggDropdown = EggHatchingSection:Dropdown("SelectEgg", {
         Title = "Select Egg",
@@ -126,21 +129,11 @@ BuildUI = function()
         Multi = false,
         Searchable = true,
         Callback = function(Value)
-            if Value == "Best Egg (Snowflakes)" then
-                -- Find the most expensive snowflakes egg regardless of affordability
-                local bestEggName = nil
-                local highestCost = 0
-                
-                for _, eggInfo in ipairs(eggsTable) do
-                    if eggInfo.currency == "snowflakes" and eggInfo.cost > highestCost then
-                        highestCost = eggInfo.cost
-                        bestEggName = eggInfo.name
-                    end
-                end
-                
-                selectedEgg = bestEggName or selectedEgg
-                return selectedEgg
+            if Value == "Build a Snowman Egg" then
+                isBuildASnowmanMode = true
+                selectedEgg = "Christmas" -- Target egg for snowman event
             else
+                isBuildASnowmanMode = false
                 selectedEgg = displayToEggName[Value] or (Value:match("^(.-) %-") or Value)
             end
         end
@@ -188,32 +181,38 @@ BuildUI = function()
                 task.spawn(function()
                     while _G.AutoHatchEnabled do
                         if not HatchingController._isHatching then
-                            local args = {selectedEgg, selectedAmount or 1}
-                            if useLuckyEggs then
-                                local bestLuckyEggId = nil
-                                local highestMultiplier = 0
-                                for luckyEggId, _ in pairs(EggController._luckyEggs or {}) do
-                                    local multiplier = (EggController._globalLuckEventAmount or 0) * 1000
-                                    if multiplier > highestMultiplier then
-                                        highestMultiplier = multiplier
-                                        bestLuckyEggId = luckyEggId
+                            if isBuildASnowmanMode then
+                                -- Special logic for Build a Snowman Egg
+                                -- Ignores lucky eggs, passes special table arg
+                                EggService.openEgg._re:FireServer("Christmas", selectedAmount or 1, {isBuildASnowman = true})
+                            else
+                                -- Standard Hatching Logic
+                                local args = {selectedEgg, selectedAmount or 1}
+                                if useLuckyEggs then
+                                    local bestLuckyEggId = nil
+                                    local highestMultiplier = 0
+                                    for luckyEggId, _ in pairs(EggController._luckyEggs or {}) do
+                                        local multiplier = (EggController._globalLuckEventAmount or 0) * 1000
+                                        if multiplier > highestMultiplier then
+                                            highestMultiplier = multiplier
+                                            bestLuckyEggId = luckyEggId
+                                        end
+                                    end
+                                    if bestLuckyEggId then
+                                        table.insert(args, {luckyEggId = bestLuckyEggId})
                                     end
                                 end
-                                if bestLuckyEggId then
-                                    table.insert(args, {luckyEggId = bestLuckyEggId})
-                                end
+                                EggService.openEgg._re:FireServer(unpack(args))
                             end
-                            EggService.openEgg._re:FireServer(unpack(args))
-                            task.wait(0.17)  -- only delay here
+                            task.wait(0.17)
                         else
-                            task.wait(0.17)  -- wait even if currently hatching
+                            task.wait(0.17)
                         end
                     end
                 end)
             end
         end
     })
-
 
     local HatchingController = require(LocalPlayer.PlayerScripts.Client.Controllers.HatchingController)
 
@@ -859,109 +858,119 @@ BuildUI = function()
         end
     })
 
+    local AutoUseSection = Tabs.Christmas:AddSection("Auto Use Items")
 
-local AutoUseSection = Tabs.Christmas:AddSection("Auto Use Items")
-
-local autoUseThread = nil
-local autoUseEnabled = false
-local selectedAutoUseItems = {}
-
--- Build list of usable consumable items
-local autoUseItemNames = {}
-local autoUseItemMap = {}
-
-pcall(function()
-    local ChristmasItems = require(ReplicatedStorage.Shared.List.Items.ChristmasEvent)
-    
-    for itemId, itemInfo in pairs(ChristmasItems) do
-        -- Only include items that are consumable (have multiplier and seconds)
-        -- Exclude unusable items, tools, and boxes
-        if itemInfo.multiplier and itemInfo.seconds and not itemInfo.unusable and not itemInfo.isTool and itemInfo.itemType ~= "box" then
-            local displayName = itemInfo.name
-            table.insert(autoUseItemNames, displayName)
-            autoUseItemMap[displayName] = itemId
-        end
-    end
-    
-    table.sort(autoUseItemNames)
-end)
-
-local autoUseDropdown = AutoUseSection:Dropdown("SelectAutoUseItems", {
-    Title = "Select Items to Auto Use",
-    Values = autoUseItemNames,
-    Multi = true,
-    Searchable = true,
-    Default = {}
-})
-
-AutoUseSection:Toggle("AutoUseChristmasItems", {
-    Title = "Auto Use Consumable Items",
-    Description = "Automatically uses selected Christmas potions and consumables when not active.",
-    Default = false,
-    Callback = function(enabled)
-        autoUseEnabled = enabled
+        local autoUseThread = nil
+        local autoUseEnabled = false
         
-        if autoUseThread then
-            task.cancel(autoUseThread)
-            autoUseThread = nil
-        end
+        -- Build list of usable items (Potions + Boxes)
+        local autoUseItemNames = {}
+        local autoUseItemMap = {}
 
-        if enabled then
-            autoUseThread = task.spawn(function()
-                while autoUseEnabled do
-                    pcall(function()
-                        local selectedItems = autoUseDropdown.Value
-                        if not next(selectedItems) then 
-                            return 
-                        end
+        pcall(function()
+            local ChristmasItems = require(ReplicatedStorage.Shared.List.Items.ChristmasEvent)
+            
+            for itemId, itemInfo in pairs(ChristmasItems) do
+                -- Check for Potions (multipler + seconds) OR Boxes
+                local isPotion = itemInfo.multiplier and itemInfo.seconds
+                local isBox = itemInfo.itemType == "box"
+                
+                -- Filter out tools and unusable items
+                if (isPotion or isBox) and not itemInfo.unusable and not itemInfo.isTool then
+                    local displayName = itemInfo.name
+                    table.insert(autoUseItemNames, displayName)
+                    autoUseItemMap[displayName] = itemId
+                end
+            end
+            
+            table.sort(autoUseItemNames)
+        end)
 
-                        local playerData = DataController:getData()
-                        if not playerData then 
-                            return 
-                        end
+        local autoUseDropdown = AutoUseSection:Dropdown("SelectAutoUseItems", {
+            Title = "Select Items to Auto Use",
+            Values = autoUseItemNames,
+            Multi = true,
+            Searchable = true,
+            Default = {}
+        })
 
-                        local ChristmasItems = require(ReplicatedStorage.Shared.List.Items.ChristmasEvent)
-                        local activeBoosts = playerData.activeBoosts or {}
+        AutoUseSection:Toggle("AutoUseChristmasItems", {
+            Title = "Auto Use Selected Items",
+            Description = "Uses potions when not active, and opens all selected boxes immediately.",
+            Default = false,
+            Callback = function(enabled)
+                autoUseEnabled = enabled
+                
+                if autoUseThread then
+                    task.cancel(autoUseThread)
+                    autoUseThread = nil
+                end
 
-                        local activeCount = 0
-                        for _ in pairs(activeBoosts) do activeCount = activeCount + 1 end
+                if enabled then
+                    autoUseThread = task.spawn(function()
+                        while autoUseEnabled do
+                            pcall(function()
+                                local selectedItems = autoUseDropdown.Value
+                                if not next(selectedItems) then return end
 
-                        -- Iterate through selected items
-                        for displayName, isSelected in pairs(selectedItems) do
-                            if isSelected then
-                                local itemId = autoUseItemMap[displayName]
-                                local itemInfo = ChristmasItems[itemId]
-                                
-                                if itemInfo then
-                                    -- Check boost names (try multiple formats)
-                                    local boostName = itemId:gsub("christmas", ""):gsub("Potion", "")
-                                    local isActive = activeBoosts[itemId] or activeBoosts[boostName] or activeBoosts[displayName]
-                                    
-                                    if not isActive then
-                                        -- Find the item in player's inventory
-                                        if playerData.inventory and playerData.inventory.christmasEvent then
-                                            for inventoryId, itemData in pairs(playerData.inventory.christmasEvent) do
-                                                if itemData.nm == itemId and itemData.am and itemData.am > 0 then
-                                                    Knit.GetService("InventoryService"):useItem(inventoryId, {use = 1})
-                                                    task.wait(1)
+                                local playerData = DataController:getData()
+                                if not playerData then return end
+
+                                local ChristmasItems = require(ReplicatedStorage.Shared.List.Items.ChristmasEvent)
+                                local activeBoosts = playerData.activeBoosts or {}
+                                local inventory = playerData.inventory and playerData.inventory.christmasEvent
+
+                                if not inventory then return end
+
+                                -- Iterate through selected items
+                                for displayName, isSelected in pairs(selectedItems) do
+                                    if isSelected then
+                                        local itemId = autoUseItemMap[displayName]
+                                        local itemInfo = ChristmasItems[itemId]
+                                        
+                                        if itemInfo then
+                                            -- Find the item in player's inventory first
+                                            local playerItemData = nil
+                                            local inventoryId = nil
+                                            
+                                            for id, data in pairs(inventory) do
+                                                if data.nm == itemId then
+                                                    playerItemData = data
+                                                    inventoryId = id
                                                     break
                                                 end
                                             end
-                                        else
+
+                                            -- If we have the item
+                                            if playerItemData and playerItemData.am > 0 then
+                                                
+                                                -- CASE 1: BOX (Use ALL)
+                                                if itemInfo.itemType == "box" then
+                                                    Knit.GetService("InventoryService"):useItem(inventoryId, {use = playerItemData.am})
+                                                    task.wait(0.5) -- Small delay to prevent spamming too hard
+                                                
+                                                -- CASE 2: POTION (Check Boosts)
+                                                elseif itemInfo.multiplier then
+                                                    -- Check boost names
+                                                    local boostName = itemId:gsub("christmas", ""):gsub("Potion", "")
+                                                    local isActive = activeBoosts[itemId] or activeBoosts[boostName] or activeBoosts[displayName]
+                                                    
+                                                    if not isActive then
+                                                        Knit.GetService("InventoryService"):useItem(inventoryId, {use = 1})
+                                                        task.wait(1)
+                                                    end
+                                                end
+                                            end
                                         end
-                                    else
-                                        local timeLeft = activeBoosts[itemId] or activeBoosts[boostName] or activeBoosts[displayName] or 0
                                     end
                                 end
-                            end
+                            end)
+                            task.wait(5) -- Check every 5 seconds
                         end
                     end)
-                    task.wait(5) -- Check every 5 seconds
                 end
-            end)
-        end
-    end
-})
+            end
+        })
 
     -- Final UI setup calls
     SaveManager:SetLibrary(Library)
