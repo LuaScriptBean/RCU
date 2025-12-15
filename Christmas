@@ -721,6 +721,7 @@ local Knit = require(game:GetService("ReplicatedStorage").Packages.Knit.KnitClie
     do
         local autoBuildThread = nil
         local originalToggleStates = nil
+        local wasInMinigame = false
 
         ChristmasSection:Toggle("AutoBuildSnowman", {
             Title = "Auto Build Snowman",
@@ -731,74 +732,85 @@ local Knit = require(game:GetService("ReplicatedStorage").Packages.Knit.KnitClie
 
                 if enabled then
                     autoBuildThread = task.spawn(function()
-                        local hasJoined = false 
-                        
                         while task.wait(0.25) do 
                             pcall(function()
                                 local cycle = (Knit.serverTimeNow + 3600) % 10800
                                 
-                                -- Timings
-                                local isJoiningWindow = cycle >= 280 and cycle < 300 
-                                local isRewardWindow = cycle >= 900 and cycle < 3600
+                                local joiningClosesIn = 300 - cycle
+                                local rewardWindowClosesIn = 3600 - cycle
+                                
+                                -- Check if we're in "Joining closes in" phase with under 20 seconds
+                                local isJoiningPhase = cycle < 300 and joiningClosesIn < 20
+                                
+                                -- Check if we're in "Reward window closes in" phase
+                                local isRewardPhase = cycle >= 900 and cycle < 3600
 
-                                if isJoiningWindow and not hasJoined then
-                                    print("[Snowman DEBUG] Join Window Active (20s mark). Preparing to join.")
+                                -- JOIN PHASE (when "Joining closes in" < 20 seconds)
+                                if isJoiningPhase and not wasInMinigame then
+                                    print(string.format("[Snowman DEBUG] Joining closes in %.1fs - Starting minigame!", joiningClosesIn))
 
-                                    if not originalToggleStates then
-                                        print("[Snowman DEBUG] Saving current states and applying Event Toggles.")
-                                        
-                                        originalToggleStates = { 
-                                            autoHatch = AutoHatchToggle1.Value, 
-                                            autoDamage = AutoDamageToggle.Value 
-                                        }
-                                        
-                                        task.defer(function() 
-                                            AutoHatchToggle1:SetValue(false)
-                                            AutoDamageToggle:SetValue(true)
-                                            print("[Snowman DEBUG] -> AutoHatch: OFF | AutoDamage: ON")
-                                        end)
+                                    -- Save current toggle states
+                                    originalToggleStates = { 
+                                        autoHatch = AutoHatchToggle1.Value, 
+                                        autoDamage = AutoDamageToggle.Value 
+                                    }
+                                    print(string.format("[Snowman DEBUG] Saved states - AutoHatch: %s | AutoDamage: %s", 
+                                        tostring(originalToggleStates.autoHatch), 
+                                        tostring(originalToggleStates.autoDamage)))
+                                    
+                                    -- Apply minigame settings
+                                    AutoHatchToggle1:SetValue(false)
+                                    AutoDamageToggle:SetValue(true)
+                                    print("[Snowman DEBUG] Applied minigame settings - AutoHatch: OFF | AutoDamage: ON")
+                                    
+                                    task.wait(0.5)
+
+                                    -- Fire the remote
+                                    print("[Snowman DEBUG] Firing Join Remote!")
+                                    local success, err = pcall(function()
+                                        Knit.GetService("SnowmanService"):joinBuildASnowman()
+                                    end)
+                                    
+                                    if success then
+                                        print("[Snowman DEBUG] ✓ Remote fired successfully!")
+                                        wasInMinigame = true
+                                    else
+                                        warn("[Snowman DEBUG] ✗ Remote fire failed:", err)
                                     end
-
-                                    -- 2. Join Event
-                                    print(string.format("[Snowman DEBUG] Firing Join Remote! Cycle: %.1f", cycle))
-                                    Knit.GetService("SnowmanService"):joinBuildASnowman()
-                                    
-                                    -- 3. Update Flag
-                                    hasJoined = true
-                                    
-                                    task.wait(5) 
                                 end
+                                
+                                -- REWARD PHASE (when in "Reward window closes in" phase)
+                                if isRewardPhase and wasInMinigame then
+                                    print(string.format("[Snowman DEBUG] Reward window active (closes in %.1fs) - Restoring toggles!", rewardWindowClosesIn))
 
-                                if isRewardWindow and hasJoined then
-                                    print("[Snowman DEBUG] Reward Window reached (Cycle >= 900). Restoring Toggles.")
-
-                                    -- 1. Restore Toggles
+                                    -- Restore original toggle states
                                     if originalToggleStates then
-                                        task.defer(function() 
-                                            AutoHatchToggle1:SetValue(originalToggleStates.autoHatch)
-                                            AutoDamageToggle:SetValue(originalToggleStates.autoDamage)
-                                        end)
-                                        print(string.format("[Snowman DEBUG] -> Toggles Restored: AutoHatch=%s | AutoDamage=%s", tostring(originalToggleStates.autoHatch), tostring(originalToggleStates.autoDamage)))
-                                        originalToggleStates = nil -- Clear saved state
+                                        AutoHatchToggle1:SetValue(originalToggleStates.autoHatch)
+                                        AutoDamageToggle:SetValue(originalToggleStates.autoDamage)
+                                        
+                                        print(string.format("[Snowman DEBUG] ✓ Toggles Restored - AutoHatch: %s | AutoDamage: %s", 
+                                            tostring(originalToggleStates.autoHatch), 
+                                            tostring(originalToggleStates.autoDamage)))
+                                        
+                                        originalToggleStates = nil
                                     end
 
-                                    -- 2. Reset Flag for the next event (in 3 hours)
-                                    hasJoined = false
-                                    print("[Snowman DEBUG] hasJoined reset to false. Waiting for next cycle.")
+                                    -- Reset flag for next event
+                                    wasInMinigame = false
+                                    print("[Snowman DEBUG] wasInMinigame reset to false. Ready for next cycle.")
                                 end
                             end)
                         end
                     end)
                 else
-                    -- Manual Disable Logic: Restore if the script was stopped mid-event
+                    -- Manual Disable: Restore toggles if disabled mid-event
                     if originalToggleStates then
-                        print("[Snowman DEBUG] Master toggle disabled manually. Restoring saved settings.")
-                        task.defer(function()
-                            AutoHatchToggle1:SetValue(originalToggleStates.autoHatch)
-                            AutoDamageToggle:SetValue(originalToggleStates.autoDamage)
-                        end)
+                        print("[Snowman DEBUG] Master toggle disabled. Restoring saved settings.")
+                        AutoHatchToggle1:SetValue(originalToggleStates.autoHatch)
+                        AutoDamageToggle:SetValue(originalToggleStates.autoDamage)
                         originalToggleStates = nil
                     end
+                    wasInMinigame = false
                 end
             end
         })
