@@ -116,13 +116,13 @@ BuildUI = function()
         displayToEggName[displayName] = eggInfo.name
     end
 
-    selectedEgg = eggsTable[1] and eggsTable[1].name
+    selectedEgg1 = eggsTable[1] and eggsTable[1].name
     local defaultEgg = eggOptions[1]
 
     -- Add the special option
     table.insert(eggOptions, "Build a Snowman Egg")
 
-    EggDropdown = EggHatchingSection:Dropdown("SelectEgg", {
+    EggDropdown1 = EggHatchingSection:Dropdown("SelectEgg", {
         Title = "Select Egg",
         Values = eggOptions,
         Default = defaultEgg,
@@ -131,19 +131,19 @@ BuildUI = function()
         Callback = function(Value)
             if Value == "Build a Snowman Egg" then
                 isBuildASnowmanMode = true
-                selectedEgg = "Christmas" -- Target egg for snowman event
+                selectedEgg1 = "Christmas" -- Target egg for snowman event
             else
                 isBuildASnowmanMode = false
-                selectedEgg = displayToEggName[Value] or (Value:match("^(.-) %-") or Value)
+                selectedEgg1 = displayToEggName[Value] or (Value:match("^(.-) %-") or Value)
             end
         end
     })
 
     local hatchAmounts = {["1x"]=1, ["3x"]=3, ["Max"]=99}
-    selectedAmount = hatchAmounts["Max"]
+    selectedAmount1 = hatchAmounts["Max"]
     HatchAmount = EggHatchingSection:Dropdown("SelectHatchAmount", {
         Title = "Select Hatch Amount", Values = {"1x", "3x", "Max"}, Multi = false, Default = "Max",
-        Callback = function(Value) selectedAmount = hatchAmounts[Value] or 1 end
+        Callback = function(Value) selectedAmount1 = hatchAmounts[Value] or 1 end
     })
 
     getLuckyIdFSnowShovelingggName = function(eggName)
@@ -176,18 +176,15 @@ BuildUI = function()
         Title = "Auto Hatch Eggs",
         Default = false,
         Callback = function(Value)
-            _G.AutoHatchEnabled = Value
+            _G.AutoHatchEnabled1 = Value
             if Value then
                 task.spawn(function()
-                    while _G.AutoHatchEnabled do
+                    while _G.AutoHatchEnabled1 do
                         if not HatchingController._isHatching then
                             if isBuildASnowmanMode then
-                                -- Special logic for Build a Snowman Egg
-                                -- Ignores lucky eggs, passes special table arg
-                                EggService.openEgg._re:FireServer("Christmas", selectedAmount or 1, {isBuildASnowman = true})
+                                EggService.openEgg._re:FireServer("Christmas", selectedAmount1 or 1, {isBuildASnowman = true})
                             else
-                                -- Standard Hatching Logic
-                                local args = {selectedEgg, selectedAmount or 1}
+                                local args = {selectedEgg1, selectedAmount1 or 1}
                                 if useLuckyEggs then
                                     local bestLuckyEggId = nil
                                     local highestMultiplier = 0
@@ -744,10 +741,10 @@ BuildUI = function()
                                     if not hasModifiedToggles then
                                         hasModifiedToggles = true
                                         print("[Snowman DEBUG] Join window is active. Saving and modifying toggles.")
-                                        originalToggleStates = { autoHatch = AutoHatchToggle.Value, autoDamage = AutoDamageToggle.Value }
+                                        originalToggleStates = { autoHatch = AutoHatchToggle1.Value, autoDamage = AutoDamageToggle.Value }
                                         print(string.format("[Snowman DEBUG] -> Original states saved: AutoHatch=%s, AutoDamage=%s", tostring(originalToggleStates.autoHatch), tostring(originalToggleStates.autoDamage)))
                                         task.defer(function() 
-                                            AutoHatchToggle:SetValue(false)
+                                            AutoHatchToggle1:SetValue(false)
                                             AutoDamageToggle:SetValue(true)
                                             print("[Snowman DEBUG] -> Toggles set for event: AutoHatch=false, AutoDamage=true")
                                         end)
@@ -767,7 +764,7 @@ BuildUI = function()
                                     print("[Snowman DEBUG] Reward window opened. Restoring original toggle states.")
                                     if originalToggleStates then
                                         task.defer(function() 
-                                            AutoHatchToggle:SetValue(originalToggleStates.autoHatch)
+                                            AutoHatchToggle1:SetValue(originalToggleStates.autoHatch)
                                             AutoDamageToggle:SetValue(originalToggleStates.autoDamage)
                                         end)
                                         print(string.format("[Snowman DEBUG] -> Toggles restored to: AutoHatch=%s, AutoDamage=%s", tostring(originalToggleStates.autoHatch), tostring(originalToggleStates.autoDamage)))
@@ -789,8 +786,8 @@ BuildUI = function()
                     if originalToggleStates then
                         print("[Snowman DEBUG] Toggles were active. Restoring original settings due to manual disable.")
                         task.defer(function()
-                            AutoHatchToggle:SetValue(originalToggleStates.autoHatch)
-                            AutoDamageToggle:SetValue(originalToggleStates.autoDamage)
+                            AutoHatchToggle11:SetValue(originalToggleStates.autoHatch)
+                            AutoDamageToggle1:SetValue(originalToggleStates.autoDamage)
                         end)
                         print(string.format("[Snowman DEBUG] -> Toggles restored to: AutoHatch=%s, AutoDamage=%s", tostring(originalToggleStates.autoHatch), tostring(originalToggleStates.autoDamage)))
                         originalToggleStates = nil
