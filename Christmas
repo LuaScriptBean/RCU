@@ -688,7 +688,6 @@ BuildUI = function()
 
 
     local Knit = require(game:GetService("ReplicatedStorage").Packages.Knit.KnitClient)
-
     local ChristmasSection = Tabs.Christmas:AddSection("Build A Snowman")
 
     local snowmanTimerParagraph = ChristmasSection:Paragraph("SnowmanTimer", {
@@ -696,10 +695,12 @@ BuildUI = function()
         Content = "Initializing..."
     })
 
+    -- Background task to update the Paragraph
     task.spawn(function()
-        while task.wait(1) do
+        while true do
             pcall(function()
                 local cycle = (Knit.serverTimeNow + 3600) % 10800
+                
                 local statusText = ""
                 if cycle < 300 then
                     statusText = "Joining closes in: " .. Functions.formatTime(300 - cycle)
@@ -710,93 +711,97 @@ BuildUI = function()
                 else
                     statusText = "Next event starts in: " .. Functions.formatTime(10800 - cycle)
                 end
+                
                 snowmanTimerParagraph:SetValue(statusText)
             end)
+            task.wait(1)
         end
     end)
 
     do
-        local autoBuildThread, originalToggleStates = nil, nil
+        local autoBuildThread = nil
+        local originalToggleStates = nil
 
         ChristmasSection:Toggle("AutoBuildSnowman", {
             Title = "Auto Build Snowman",
-            Description = "Joins the event, enables Auto Damage, and disables Auto Hatch.",
+            Description = "Joins at 20s mark, sets Event Toggles, restores them when Reward Window opens.",
             Default = false,
             Callback = function(enabled)
                 if autoBuildThread then task.cancel(autoBuildThread); autoBuildThread = nil end
 
                 if enabled then
-                    print("[Snowman DEBUG] AutoBuildSnowman has been ENABLED. Starting automation thread.")
                     autoBuildThread = task.spawn(function()
-                        local hasModifiedToggles = false
-                        local hasAttemptedJoin = false
+                        -- Track if we have joined the CURRENT event
+                        local hasJoined = false 
                         
-                        while task.wait(5) do
+                        while task.wait(0.25) do 
                             pcall(function()
                                 local cycle = (Knit.serverTimeNow + 3600) % 10800
-                                local isTimeToJoin = cycle >= 280 and cycle < 300
+                                
+                                -- Timings
+                                local isJoiningWindow = cycle >= 280 and cycle < 300 
                                 local isRewardWindow = cycle >= 900 and cycle < 3600
 
-                                if isTimeToJoin then
-                                    if not hasModifiedToggles then
-                                        hasModifiedToggles = true
-                                        print("[Snowman DEBUG] Join window is active. Saving and modifying toggles.")
-                                        originalToggleStates = { autoHatch = AutoHatchToggle1.Value, autoDamage = AutoDamageToggle.Value }
-                                        print(string.format("[Snowman DEBUG] -> Original states saved: AutoHatch=%s, AutoDamage=%s", tostring(originalToggleStates.autoHatch), tostring(originalToggleStates.autoDamage)))
+                                if isJoiningWindow and not hasJoined then
+                                    print("[Snowman DEBUG] Join Window Active (20s mark). Preparing to join.")
+
+                                    -- 1. Save & Modify Toggles (Only if not already done)
+                                    if not originalToggleStates then
+                                        print("[Snowman DEBUG] Saving current states and applying Event Toggles.")
+                                        
+                                        originalToggleStates = { 
+                                            autoHatch = AutoHatchToggle1.Value, 
+                                            autoDamage = AutoDamageToggle.Value 
+                                        }
+                                        
                                         task.defer(function() 
                                             AutoHatchToggle1:SetValue(false)
                                             AutoDamageToggle:SetValue(true)
-                                            print("[Snowman DEBUG] -> Toggles set for event: AutoHatch=false, AutoDamage=true")
+                                            print("[Snowman DEBUG] -> AutoHatch: OFF | AutoDamage: ON")
                                         end)
                                     end
 
-                                    if not hasAttemptedJoin then
-                                        hasAttemptedJoin = true
-                                        print("[Snowman DEBUG] Firing join remote (Attempt 1/2)...")
-                                        Knit.GetService("SnowmanService"):joinBuildASnowman()
-                                        task.wait(5)
-                                        print("[Snowman DEBUG] Firing join remote (Attempt 2/2)...")
-                                        Knit.GetService("SnowmanService"):joinBuildASnowman()
-                                        print("[Snowman DEBUG] Both join attempts are complete.")
-                                    end
-                                
-                                elseif isRewardWindow and hasModifiedToggles then
-                                    print("[Snowman DEBUG] Reward window opened. Restoring original toggle states.")
+                                    -- 2. Join Event
+                                    print(string.format("[Snowman DEBUG] Firing Join Remote! Cycle: %.1f", cycle))
+                                    Knit.GetService("SnowmanService"):joinBuildASnowman()
+                                    
+                                    -- 3. Update Flag
+                                    hasJoined = true
+                                    task.wait(5) 
+                                end
+
+                                if isRewardWindow and hasJoined then
+                                    print("[Snowman DEBUG] Reward Window reached (Cycle >= 900). Restoring Toggles.")
+
+                                    -- 1. Restore Toggles
                                     if originalToggleStates then
                                         task.defer(function() 
                                             AutoHatchToggle1:SetValue(originalToggleStates.autoHatch)
                                             AutoDamageToggle:SetValue(originalToggleStates.autoDamage)
                                         end)
-                                        print(string.format("[Snowman DEBUG] -> Toggles restored to: AutoHatch=%s, AutoDamage=%s", tostring(originalToggleStates.autoHatch), tostring(originalToggleStates.autoDamage)))
-                                    end
-                                    hasModifiedToggles = false
-                                    originalToggleStates = nil
-                                    print("[Snowman DEBUG] Restoration complete. Idling until next join window.")
-                                end
+                                        print(string.format("[Snowman DEBUG] -> Toggles Restored: AutoHatch=%s | AutoDamage=%s", tostring(originalToggleStates.autoHatch), tostring(originalToggleStates.autoDamage)))
+                                        originalToggleStates = nil 
 
-                                if cycle < 280 and hasAttemptedJoin then
-                                    print("[Snowman DEBUG] New cycle period detected. Resetting 'hasAttemptedJoin' flag for next run.")
-                                    hasAttemptedJoin = false
+                                    hasJoined = false
+                                    print("[Snowman DEBUG] hasJoined reset to false. Waiting for next cycle.")
                                 end
                             end)
                         end
                     end)
-                else 
-                    print("[Snowman DEBUG] AutoBuildSnowman has been DISABLED.")
+                else
                     if originalToggleStates then
-                        print("[Snowman DEBUG] Toggles were active. Restoring original settings due to manual disable.")
+                        print("[Snowman DEBUG] Master toggle disabled manually. Restoring saved settings.")
                         task.defer(function()
-                            AutoHatchToggle11:SetValue(originalToggleStates.autoHatch)
-                            AutoDamageToggle1:SetValue(originalToggleStates.autoDamage)
+                            AutoHatchToggle1:SetValue(originalToggleStates.autoHatch)
+                            AutoDamageToggle:SetValue(originalToggleStates.autoDamage)
                         end)
-                        print(string.format("[Snowman DEBUG] -> Toggles restored to: AutoHatch=%s, AutoDamage=%s", tostring(originalToggleStates.autoHatch), tostring(originalToggleStates.autoDamage)))
                         originalToggleStates = nil
                     end
                 end
             end
         })
     end
-
+    
     local claimChestThread = nil
 
     ChristmasSection:Toggle("AutoClaimChest", {
