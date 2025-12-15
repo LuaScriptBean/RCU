@@ -771,7 +771,7 @@ local isNoPetsEnabled = false
     SaveManager:IgnoreThemeSettings()
     SaveManager:SetIgnoreIndexes{}
     InterfaceManager:SetFolder("FluentScriptHub")
-    SaveManager:SetFolder("FluentScriptHub/RCU-main")
+    SaveManager:SetFolder("FluentScriptHub/RCU-Dungeon")
 
     InterfaceManager:BuildInterfaceSection(Tabs.Settings)
     SaveManager:BuildConfigSection(Tabs.Settings)
