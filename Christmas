@@ -687,7 +687,7 @@ BuildUI = function()
     end
 
 
-    local Knit = require(game:GetService("ReplicatedStorage").Packages.Knit.KnitClient)
+local Knit = require(game:GetService("ReplicatedStorage").Packages.Knit.KnitClient)
     local ChristmasSection = Tabs.Christmas:AddSection("Build A Snowman")
 
     local snowmanTimerParagraph = ChristmasSection:Paragraph("SnowmanTimer", {
@@ -724,14 +724,13 @@ BuildUI = function()
 
         ChristmasSection:Toggle("AutoBuildSnowman", {
             Title = "Auto Build Snowman",
-            Description = "Joins at 20s mark, sets Event Toggles, restores them when Reward Window opens.",
+            Description = "Temporarily adjusts your Auto Hatch and Auto Damage toggles to maximize rewards.",
             Default = false,
             Callback = function(enabled)
                 if autoBuildThread then task.cancel(autoBuildThread); autoBuildThread = nil end
 
                 if enabled then
                     autoBuildThread = task.spawn(function()
-                        -- Track if we have joined the CURRENT event
                         local hasJoined = false 
                         
                         while task.wait(0.25) do 
@@ -745,7 +744,6 @@ BuildUI = function()
                                 if isJoiningWindow and not hasJoined then
                                     print("[Snowman DEBUG] Join Window Active (20s mark). Preparing to join.")
 
-                                    -- 1. Save & Modify Toggles (Only if not already done)
                                     if not originalToggleStates then
                                         print("[Snowman DEBUG] Saving current states and applying Event Toggles.")
                                         
@@ -767,6 +765,7 @@ BuildUI = function()
                                     
                                     -- 3. Update Flag
                                     hasJoined = true
+                                    
                                     task.wait(5) 
                                 end
 
@@ -780,8 +779,10 @@ BuildUI = function()
                                             AutoDamageToggle:SetValue(originalToggleStates.autoDamage)
                                         end)
                                         print(string.format("[Snowman DEBUG] -> Toggles Restored: AutoHatch=%s | AutoDamage=%s", tostring(originalToggleStates.autoHatch), tostring(originalToggleStates.autoDamage)))
-                                        originalToggleStates = nil 
+                                        originalToggleStates = nil -- Clear saved state
+                                    end
 
+                                    -- 2. Reset Flag for the next event (in 3 hours)
                                     hasJoined = false
                                     print("[Snowman DEBUG] hasJoined reset to false. Waiting for next cycle.")
                                 end
@@ -789,6 +790,7 @@ BuildUI = function()
                         end
                     end)
                 else
+                    -- Manual Disable Logic: Restore if the script was stopped mid-event
                     if originalToggleStates then
                         print("[Snowman DEBUG] Master toggle disabled manually. Restoring saved settings.")
                         task.defer(function()
