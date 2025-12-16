@@ -5175,7 +5175,7 @@ for attempt = 1, maxRetries do
                 Title = "Webhook Script",
                 Description = "Sorry for the separate loadstring! Having such a large script was causing me to run out of local uses and creating lag issues.",
                 Callback = function()
-                    loadstring(game:HttpGet("https://raw.githubusercontent.com/LuaScriptBean/RCU/refs/heads/main/Webhook"))()
+                    loadstring(game:HttpGet("https://raw.githubusercontent.com/LuaScriptBean/RCU/refs/heads/main/DiscordWebhook"))()
                 end
             })
 
@@ -5186,7 +5186,7 @@ for attempt = 1, maxRetries do
             Callback = function(enabled)
                 AutoLoadWebhook = enabled
                 if enabled then
-                    loadstring(game:HttpGet("https://raw.githubusercontent.com/LuaScriptBean/RCU/refs/heads/main/Webhook"))()
+                    loadstring(game:HttpGet("https://raw.githubusercontent.com/LuaScriptBean/RCU/refs/heads/main/DiscordWebhook"))()
                 end
             end})
 
@@ -5336,16 +5336,16 @@ for attempt = 1, maxRetries do
     end)
     
     if success and loadSuccess then
-        print(string.format("[Tap Simulator] Successfully loaded on attempt %d/%d", attempt, maxRetries))
+        print(string.format("[RCU] Successfully loaded on attempt %d/%d", attempt, maxRetries))
         break
     else
-        warn(string.format("[Tap Simulator] Failed to load (Attempt %d/%d): %s", attempt, maxRetries, tostring(errorMsg)))
+        warn(string.format("[RCU] Failed to load (Attempt %d/%d): %s", attempt, maxRetries, tostring(errorMsg)))
         
         if attempt < maxRetries then
-            warn(string.format("[Tap Simulator] Retrying in %d seconds...", retryDelay))
+            warn(string.format("[RCU] Retrying in %d seconds...", retryDelay))
             task.wait(retryDelay)
         else
-            warn("[Tap Simulator] Failed to load after " .. maxRetries .. " attempts. Please try again.")
+            warn("[RCU] Failed to load after " .. maxRetries .. " attempts. Please try again.")
         end
     end
 end
