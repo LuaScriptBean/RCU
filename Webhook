@@ -281,7 +281,7 @@ BuildUI = function()
                     { name = "Game", value = gameName or "Unknown", inline = true },
                     { name = "Executor", value = identifyexecutor and identifyexecutor() or "Unknown", inline = true }
                 },
-                footer = { text = "RCU by Ducker (Gemini😅)" },
+                footer = { text = "RCU by Ducky (Gemini😅)" },
                 timestamp = os.date("!%Y-%m-%dT%H:%M:%S")
             }
 
@@ -422,7 +422,7 @@ task.spawn(function()
 
     Window = Library:Window{
         Title = "RCU Webhook",
-        SubTitle = "By Ducker (Gemini😅)",
+        SubTitle = "By Ducky (Gemini😅)",
         TabWidth = 160,
         Size = UDim2.fromOffset(580, 500),
         Resize = false,
