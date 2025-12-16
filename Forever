@@ -1,0 +1,132 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Knit = require(ReplicatedStorage.Packages.Knit)
+local DataController = Knit.GetController("DataController")
+
+-- Load required modules
+local ChristmasForeverPack = require(ReplicatedStorage.Shared.List.Christmas.ChristmasForeverPack)
+local Functions = require(ReplicatedStorage.Shared.Functions)
+
+-- Get player data
+local playerData = DataController:getData()
+local currentTier = playerData.christmasForeverPackTier
+local resets = playerData.christmasForeverPackResets
+
+-- Check if pack has reset (24+ hours since last claim)
+if os.time() - playerData.christmasForeverPackLast > 86400 then
+    currentTier = 0
+    resets = resets + 1
+end
+
+-- Statistics tracking
+local stats = {
+    totalFree = 0,
+    totalRobux = 0,
+    totalRobuxCost = 0,
+    itemCounts = {},
+    classCounts = {},
+    tierLevelCounts = {}
+}
+
+-- Collect all output in a table
+local output = {}
+
+local function addLine(str)
+    table.insert(output, str)
+end
+
+addLine("=== CHRISTMAS FOREVER PACK - FULL ANALYSIS ===")
+addLine("Current Tier: " .. tostring(currentTier))
+addLine("Resets: " .. tostring(resets))
+addLine("Last Claimed: " .. os.date("%Y-%m-%d %H:%M:%S", playerData.christmasForeverPackLast))
+addLine("")
+
+addLine("=== ALL 1000 UPCOMING REWARDS ===")
+addLine(string.format("%-6s | %-10s | %-15s | %-40s | %-15s | %-8s", 
+    "Status", "Tier", "Cost", "Item Name", "Class", "Amount"))
+addLine(string.rep("-", 110))
+
+for i = 1, 1000 do
+    local nextTierNum = currentTier + i
+    local distance = i
+
+    -- Calculate tier level (determines reward pool)
+    local tierLevel
+    if nextTierNum == 1 then
+        tierLevel = 1
+    else
+        tierLevel = math.floor(nextTierNum / 8) + 2
+    end
+    tierLevel = math.clamp(tierLevel, 1, #ChristmasForeverPack)
+
+    -- Get the reward using the game's random seed system
+    local rewardPool = ChristmasForeverPack[tierLevel].rewards
+    local randomIndex = Functions.getRandom(rewardPool, playerData.randomSeed * (3 + resets) + nextTierNum)
+    local rewardData = rewardPool[randomIndex]
+
+    -- Get reward info
+    local item = rewardData.item
+    local itemName = item:getName()
+    local itemClass = item:getClass()
+    local price = ChristmasForeverPack[tierLevel].price
+
+    -- Get amount
+    local amount = 1
+    if item.getAmount then
+        local ok, amt = pcall(function() return item:getAmount() end)
+        if ok and type(amt) == "number" then
+            amount = amt
+        end
+    end
+    local amountStr = tostring(amount) .. "x"
+    local itemNameWithAmount = itemName
+    if amount > 1 then
+        itemNameWithAmount = itemName
+    end
+
+    -- Determine if it's free or robux
+    local costType
+    local costDisplay
+    if nextTierNum % 4 == 2 then
+        costType = "ROBUX"
+        costDisplay = string.format("%d R$", price)
+        stats.totalRobux = stats.totalRobux + 1
+        stats.totalRobuxCost = stats.totalRobuxCost + price
+    else
+        costType = "FREE"
+        costDisplay = "FREE"
+        stats.totalFree = stats.totalFree + 1
+    end
+
+    -- Track statistics
+    stats.itemCounts[itemName] = (stats.itemCounts[itemName] or 0) + 1
+    stats.classCounts[itemClass] = (stats.classCounts[itemClass] or 0) + 1
+    stats.tierLevelCounts[tierLevel] = (stats.tierLevelCounts[tierLevel] or 0) + 1
+
+    -- Print reward info
+    local status
+    if i == 1 then
+        status = "→ NEXT"
+    elseif i <= 10 then
+        status = string.format("  +%d", distance - 1)
+    else
+        status = string.format("+%d", distance - 1)
+    end
+
+    addLine(string.format("%-6s | %-10d | %-15s | %-40s | %-15s | %-8s", 
+        status, 
+        nextTierNum, 
+        costDisplay, 
+        itemNameWithAmount:sub(1, 40), 
+        itemClass,
+        amountStr
+    ))
+end
+
+-- Copy to clipboard (if supported by executor)
+local text = table.concat(output, "\n")
+if setclipboard then
+    setclipboard(text)
+    print("Analysis copied to clipboard!")
+else
+    print("setclipboard not supported in this executor.")
+end
