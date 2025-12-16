@@ -742,45 +742,66 @@ BuildUI = function()
 
                                 local isJoiningTime = isEventStartingSoon and cycle >= 270 and cycle <= 300
                                 local isInMinigame = inMinigameTimer ~= "N/A" and inMinigameTimer ~= "00:00"
+                                
+                                -- Check if we're in the reward window (between building end and reward window close)
+                                local isRewardWindow = cycle >= 900 and cycle < 3600
 
-                                if isJoiningTime or isInMinigame then
-                                        AutoHatch:SetValue(false)
-                                        AutoDamage:SetValue(true)
-
+                                -- State 1 & 2: Active Phase (Joining or In Minigame)
+                                if (isJoiningTime or isInMinigame) and not isRewardWindow then
+                                    
+                                    -- This block runs only ONCE per event cycle, at the very beginning
                                     if not hasPausedOtherToggles then
                                         hasPausedOtherToggles = true
+                                        print("[Snowman] Event active. Saving current settings and applying minigame settings.")
 
                                         originalToggleStates = {
                                             autoHatch = AutoHatch.Value, 
                                             autoDamage = AutoDamage.Value
                                         }
 
-                                        AutoHatch:SetValue(false)
-                                        AutoDamage:SetValue(true)
+                                        task.defer(function() 
+                                            AutoHatch:SetValue(false)
+                                            AutoDamage:SetValue(true)
+                                        end)
+                                        print("[Snowman] Applied settings - AutoHatch: OFF | AutoDamage: ON")
                                     end
                                     
+                                    -- Joining Logic (runs during the 30-second window)
                                     if isJoiningTime then
+                                        print("[Snowman] Attempting to join...")
                                         Knit.GetService("SnowmanService"):joinBuildASnowman()
                                         task.wait(9)
                                     end
 
+                                    -- In-Minigame Logic (runs only when inside the minigame)
                                     if isInMinigame then
+                                        -- No additional actions needed while in minigame
                                     end
 
-                                elseif hasPausedOtherToggles then
+                                -- State 3: Restoration Phase (When reward window starts)
+                                elseif hasPausedOtherToggles and isRewardWindow then
+                                    print("[Snowman] Reward window active. Restoring original toggle states.")
+                                    
+                                    -- Restore settings only if we have a saved state
                                     if originalToggleStates then
                                         task.defer(function() 
                                             AutoHatch:SetValue(originalToggleStates.autoHatch)
                                             AutoDamage:SetValue(originalToggleStates.autoDamage)
                                         end)
+                                        print("[Snowman] Restored - AutoHatch: " .. tostring(originalToggleStates.autoHatch) .. " | AutoDamage: " .. tostring(originalToggleStates.autoDamage))
                                     end
+                                    
+                                    -- Reset state for the next cycle
                                     hasPausedOtherToggles = false
+                                    print("[Snowman] Restoration complete. Awaiting next event.")
                                 end
                             end)
                         end
                     end)
                 else 
+                    -- This runs when the master toggle is turned OFF
                     if originalToggleStates then
+                        print("[Snowman] Master toggle disabled. Restoring all original settings.")
                         task.defer(function()
                             AutoHatch:SetValue(originalToggleStates.autoHatch)
                             AutoDamage:SetValue(originalToggleStates.autoDamage)
