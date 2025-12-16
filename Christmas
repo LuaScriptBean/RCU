@@ -782,8 +782,8 @@ BuildUI = function()
                 else 
                     if originalToggleStates then
                         task.defer(function()
-                            AutoHatchToggle1:SetValue(originalToggleStates.autoHatch)
-                            AutoDamageToggle:SetValue(originalToggleStates.autoDamage)
+                            AutoHatch:SetValue(originalToggleStates.autoHatch)
+                            AutoDamage:SetValue(originalToggleStates.autoDamage)
                         end)
                         originalToggleStates = nil 
                     end
