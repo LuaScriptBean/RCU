@@ -4089,17 +4089,6 @@ for attempt = 1, maxRetries do
                 end
             })
 
-            ForeverPackSection = Tabs.Misc:AddSection("Forever Pack")
-
-                ForeverPackSection:Button({
-                Title = "All Future Items",
-                Description = "This will copy the next 1000 items you will get in the forever pack \nto your clipboard.",
-                Callback = function()
-                    loadstring(game:HttpGet("https://raw.githubusercontent.com/LuaScriptBean/RCU/refs/heads/main/Forever"))()
-                end
-            })
-
-
             AncientWheel = Tabs.Misc:AddSection("Ancient Wheel")
             isAutoSpinEnabled = false
             AncientWheel:Toggle("AutoSpin", { Title = "Auto Spin Ancient Wheel", Default = false,
